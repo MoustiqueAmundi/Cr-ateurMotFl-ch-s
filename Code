@@ -1,447 +1,790 @@
-import { useState, useEffect, useRef } from "react";
-
-const CELL_SIZE = 52;
-
-function createGrid(rows, cols) {
-return Array.from({ length: rows }, () =>
-Array.from({ length: cols }, () => ({
-type: "white",
-letter: "",
-defR: "",
-defD: "",
-}))
-);
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mots Fléchés — Éditeur Ultime</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Courier+Prime:wght@400;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --p:#F4EFE4;--pm:#EDE7D4;--pd:#E0D8C5;
+  --ink:#1C1710;--inkl:#4A3C2A;--inkf:#8A7A65;
+  --gc:#1E1E1E;--gt:#D8D0C4;
+  --gold:#B8960C;--goldm:#D4AE30;--goldf:#FDF6E0;
+  --red:#8A1C1C;--grn:#1A5A1A;
+  --cs:58px;
+  --serif:'Playfair Display',Georgia,serif;
+  --body:'EB Garamond',Georgia,serif;
+  --mono:'Courier Prime','Courier New',monospace;
 }
+body{background:var(--p);color:var(--ink);font-family:var(--body);min-height:100vh;font-size:15px;overflow-x:hidden}
 
-function deepCopy(g) {
-return g.map(row => row.map(cell => ({ ...cell })));
+/* HEADER */
+header{background:var(--ink);color:var(--p);padding:0 22px;height:54px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:300;box-shadow:0 3px 12px rgba(0,0,0,.45)}
+.htitle{font-family:var(--serif);font-size:20px;font-weight:900;letter-spacing:-.3px;line-height:1}
+.hsub{font-size:10px;font-style:italic;color:#7A6A55;letter-spacing:1.5px;margin-top:1px}
+.hright{display:flex;gap:8px;align-items:center}
+.sind{font-size:10px;color:#6A5A45;font-style:italic;transition:opacity .4s;min-width:90px;text-align:right}
+
+/* TOOLBAR */
+.toolbar{background:var(--pm);border-bottom:2px solid var(--ink);padding:6px 18px;
+  display:flex;gap:6px;align-items:center;flex-wrap:wrap;min-height:44px}
+.tg{display:flex;gap:4px;align-items:center;padding-right:10px;
+  border-right:1px solid #C0B098;margin-right:2px}
+.tg:last-child{border-right:none;padding-right:0}
+
+/* BUTTONS */
+.btn{font-family:var(--body);font-size:13px;padding:6px 13px;
+  border:1.5px solid transparent;border-radius:2px;cursor:pointer;
+  transition:all .12s;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;line-height:1}
+.btn:disabled{opacity:.3;cursor:not-allowed!important;pointer-events:none}
+.bdk{background:var(--ink);color:var(--p);border-color:var(--ink)}
+.bdk:hover{background:#352510}
+.blt{background:transparent;color:var(--inkl);border-color:#C0B098}
+.blt:hover{background:var(--pm);border-color:var(--inkl)}
+.bgold{background:var(--gold);color:#FFF;border-color:var(--gold);font-weight:700}
+.bgold:hover{background:#9A6E00}
+.bred{background:transparent;color:var(--red);border-color:#D4AAAA}
+.bred:hover{background:#FFF0F0}
+.bon{background:var(--goldf);border-color:var(--gold);color:var(--gold);font-weight:700}
+.bsm{padding:5px 10px;font-size:12px}
+
+select{font-family:var(--body);font-size:12px;padding:5px 7px;
+  border:1.5px solid #C0B098;background:var(--p);border-radius:2px;color:var(--ink)}
+
+/* LAYOUT */
+.main{display:flex;height:calc(100vh - 100px);overflow:hidden}
+.garea{flex:1;overflow:auto;padding:22px;display:flex;flex-direction:column;align-items:center;gap:18px}
+
+/* GRID */
+.grid{display:inline-grid;border:2.5px solid var(--ink);box-shadow:5px 5px 0 var(--ink);line-height:0;user-select:none}
+
+/* CELLS */
+.cell{width:var(--cs);height:var(--cs);border:1px solid #383838;
+  position:relative;cursor:pointer;overflow:hidden;flex-shrink:0;transition:filter .08s}
+.cell.white{background:#FFF}
+.cell.grey{background:var(--gc)}
+.cell.sel::after{content:'';position:absolute;inset:0;
+  outline:3px solid var(--gold);outline-offset:-3px;z-index:10;pointer-events:none}
+.cell.hl{background:#FFFBF0}
+
+/* Letter */
+.cltr{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:23px;font-weight:700;color:var(--ink);pointer-events:none}
+.cltr.pl{color:#1A4080}
+.cltr.ok{color:var(--grn)}
+.cltr.ko{color:var(--red)}
+
+/* Number badge */
+.cnum{position:absolute;bottom:3px;right:4px;font-size:10px;font-weight:700;
+  font-family:var(--body);color:var(--gold);line-height:1;pointer-events:none;z-index:5}
+
+/* Grey cell definitions */
+.cdef{position:absolute;inset:2px 3px;display:flex;flex-direction:column;
+  justify-content:space-between;pointer-events:none}
+.cdt,.cdb{display:flex;align-items:flex-start;justify-content:space-between;gap:2px;max-height:52%;overflow:hidden}
+.cdb{align-items:flex-end}
+.cdtxt{font-size:7px;line-height:1.25;color:var(--gt);font-family:var(--body);
+  overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;flex:1}
+.cdarr{font-size:11px;color:var(--goldm);font-weight:700;flex-shrink:0;margin-top:-1px}
+.cdb .cdarr{margin-top:0;align-self:flex-end}
+.cddiv{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;opacity:.25}
+
+/* PHRASE STRIP */
+.pstrip{background:var(--ink);padding:13px 20px;border:2.5px solid var(--ink);
+  border-radius:2px;box-shadow:4px 4px 0 var(--ink);display:flex;
+  align-items:center;gap:14px;max-width:100%;overflow-x:auto;flex-wrap:wrap}
+.plbl{font-family:var(--serif);font-size:11px;color:#7A6A55;
+  text-transform:uppercase;letter-spacing:2px;white-space:nowrap;flex-shrink:0}
+.pboxes{display:flex;gap:4px;flex-wrap:wrap;align-items:flex-end}
+.pbox{width:36px;height:44px;background:#252515;border:1.5px solid #605A40;
+  border-radius:1px;display:flex;flex-direction:column;align-items:center;
+  justify-content:flex-end;padding-bottom:4px;position:relative;transition:all .2s}
+.pbox-n{position:absolute;top:3px;font-size:9px;font-weight:700;
+  font-family:var(--body);color:var(--goldm)}
+.pbox-l{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--goldm);line-height:1}
+.pbox.lit{border-color:var(--gold);background:#2C2200}
+.pbox.lit .pbox-l{color:#FFD740}
+
+/* SIDEBAR */
+.sb{width:272px;min-width:272px;background:var(--pd);border-left:2px solid var(--ink);
+  overflow-y:auto;display:flex;flex-direction:column}
+.ss{padding:14px 16px;border-bottom:1px solid #C0B098}
+.stitle{font-family:var(--serif);font-size:12px;font-weight:700;text-transform:uppercase;
+  letter-spacing:1.5px;margin-bottom:11px;display:flex;align-items:center;gap:6px}
+.sempty{padding:26px 16px;font-style:italic;font-size:13px;color:var(--inkf);
+  text-align:center;line-height:1.7}
+kbd{display:inline-block;background:var(--pm);border:1px solid #C0B098;border-radius:2px;
+  padding:1px 5px;font-size:11px;font-family:var(--mono)}
+
+/* Type toggle */
+.ttog{display:flex;border:1.5px solid var(--ink);border-radius:2px;overflow:hidden;margin-bottom:14px}
+.ttog button{flex:1;padding:9px;font-family:var(--body);font-size:13px;border:none;cursor:pointer;transition:all .12s}
+.ttog button.on{background:var(--ink);color:var(--p)}
+.ttog button:not(.on){background:var(--p);color:var(--inkl)}
+.ttog button:not(.on):hover{background:var(--pm)}
+
+/* Form */
+.fg{margin-bottom:13px}
+.fl{display:block;font-size:10px;color:var(--inkf);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:4px}
+.fi,.fta{font-family:var(--body);font-size:13px;padding:8px 9px;
+  border:1.5px solid #C0B098;background:var(--p);border-radius:2px;color:var(--ink);
+  width:100%;transition:border-color .12s}
+.fi:focus,.fta:focus{outline:none;border-color:var(--gold)}
+.fta{resize:vertical;min-height:50px}
+.fi-l{font-size:28px;font-family:var(--mono);font-weight:700;text-align:center;padding:5px 4px}
+.fi-n{font-size:22px;font-family:var(--mono);font-weight:700;text-align:center;
+  color:var(--gold);border-color:var(--gold);background:var(--goldf);width:72px}
+
+/* Validation */
+.vi{font-size:12px;padding:6px 8px;border-radius:2px;margin-bottom:5px;
+  display:flex;gap:7px;align-items:flex-start;line-height:1.45}
+.vi.w{background:#FFF8E0;color:#7A5A00;border-left:3px solid #D4A800}
+.vi.e{background:#FFF0F0;color:#7A1A1A;border-left:3px solid var(--red)}
+.vi.ok{background:#F0FFF0;color:#1A5A1A;border-left:3px solid var(--grn)}
+
+/* Mode banner */
+.mbanner{padding:7px 20px;text-align:center;font-family:var(--serif);
+  font-size:11px;letter-spacing:2.5px;text-transform:uppercase;font-weight:700}
+.mbanner.play{background:#0D2A16;color:#58B870}
+.mbanner.sol{background:#0D1828;color:#5878B8}
+
+/* Hint dot on numbered cell */
+.cell.numbered::before{content:'';position:absolute;top:3px;left:3px;
+  width:6px;height:6px;border-radius:50%;background:var(--gold);opacity:.6;z-index:4}
+
+@media print{
+  header,.toolbar,.sb,.mbanner{display:none!important}
+  .main{height:auto;overflow:visible}
+  .garea{padding:0;overflow:visible;align-items:flex-start}
+  .pstrip{background:white!important;box-shadow:none!important;border-color:#555!important}
+  .plbl{color:#444!important}.pbox-n{color:#444!important}
+  .pbox-l,.pbox.lit .pbox-l{color:#000!important}
+  .pbox,.pbox.lit{background:white!important;border-color:#555!important}
+  .cell.grey{background:#222!important}.grid{box-shadow:none}
+  body{background:white}
 }
+</style>
+</head>
+<body>
 
-function GridCell({ cell, size, isSelected, isPreview, onClick }) {
-const isGrey = cell.type === "grey";
-const hasBoth = isGrey && cell.defR && cell.defD;
+<header>
+  <div>
+    <div class="htitle">Mots Fléchés</div>
+    <div class="hsub">Éditeur Professionnel</div>
+  </div>
+  <div class="hright">
+    <span class="sind" id="sind"></span>
+    <button class="btn blt bsm" onclick="printGrid()">🖨 Imprimer</button>
+    <button class="btn bgold bsm" onclick="exportPlayer()">⬇ Exporter (joueur)</button>
+  </div>
+</header>
 
-const border = `1px solid ${isPreview ? "#1A1A1A" : "#2A2A2A"}`;
-const selectionRing = isSelected
-? { outline: "2.5px solid #C8A400", outlineOffset: "-2.5px", zIndex: 1 }
-: {};
-
-if (isGrey) {
-return (
-<div
-onClick={onClick}
-style={{
-width: size, height: size, border,
-background: isSelected ? "#3A2800" : "#2F2F2F",
-position: "relative", overflow: "hidden",
-cursor: isPreview ? "default" : "pointer",
-userSelect: "none", flexShrink: 0,
-...selectionRing,
-}}
->
-{hasBoth && (
-<svg style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
-<line x1="0" y1="0" x2={size} y2={size} stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
-</svg>
-)}
-{cell.defR && (
-<div style={{
-position: "absolute",
-top: hasBoth ? 2 : "50%",
-transform: hasBoth ? "none" : "translateY(-50%)",
-left: 3, right: 3,
-display: "flex", justifyContent: "space-between", alignItems: "flex-start",
-fontSize: Math.max(7, Math.floor(size / 7.5)),
-lineHeight: 1.15,
-color: "#E8E0D0",
-fontFamily: "'Georgia', serif",
-}}>
-<span style={{ flex: 1, wordBreak: "break-word", overflow: "hidden",
-display: "-webkit-box", WebkitLineClamp: hasBoth ? 2 : 3, WebkitBoxOrient: "vertical" }}>
-{cell.defR}
-</span>
-<span style={{ color: "#FFD700", fontWeight: "bold", marginLeft: 2, flexShrink: 0 }}>→</span>
+<div class="toolbar">
+  <div class="tg">
+    <button class="btn blt bsm" id="ubtn" onclick="doUndo()" disabled title="Ctrl+Z">↩ Annuler</button>
+    <button class="btn blt bsm" id="rbtn" onclick="doRedo()" disabled title="Ctrl+Y">↪ Refaire</button>
+  </div>
+  <div class="tg">
+    <label style="font-size:12px;color:var(--inkl)">Lignes <select id="rsel"></select></label>
+    <label style="font-size:12px;color:var(--inkl);margin-left:8px">Colonnes <select id="csel"></select></label>
+  </div>
+  <div class="tg" id="modegrp">
+    <button class="btn bsm bon" id="me" onclick="setMode('edit')">✎ Éditer</button>
+    <button class="btn blt bsm" id="mp" onclick="setMode('play')">▶ Jouer</button>
+    <button class="btn blt bsm" id="ms" onclick="setMode('sol')">★ Solution</button>
+  </div>
+  <div class="tg">
+    <button class="btn bred bsm" onclick="doClear()">✕ Effacer tout</button>
+  </div>
 </div>
-)}
-{cell.defD && (
-<div style={{
-position: "absolute",
-bottom: 2, left: 3, right: 3,
-display: "flex", justifyContent: "space-between", alignItems: "flex-end",
-fontSize: Math.max(7, Math.floor(size / 7.5)),
-lineHeight: 1.15,
-color: "#E8E0D0",
-fontFamily: "'Georgia', serif",
-}}>
-<span style={{ flex: 1, wordBreak: "break-word", overflow: "hidden",
-display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
-{cell.defD}
-</span>
-<span style={{ color: "#FFD700", fontWeight: "bold", marginLeft: 2, flexShrink: 0 }}>↓</span>
-</div>
-)}
-</div>
-);
-}
 
-return (
-<div
-onClick={onClick}
-style={{
-width: size, height: size, border,
-background: isSelected ? "#FFFBEE" : "#FFFFFF",
-position: "relative", flexShrink: 0,
-cursor: isPreview ? "default" : "pointer",
-userSelect: "none",
-display: "flex", alignItems: "center", justifyContent: "center",
-...selectionRing,
-}}
->
-<span style={{
-fontSize: Math.floor(size * 0.46),
-fontFamily: "'Courier New', monospace",
-fontWeight: "bold",
-color: "#111",
-}}>
-{cell.letter}
-</span>
-</div>
-);
-}
+<div id="mbanner" style="display:none"></div>
 
-const selectStyle = {
-fontFamily: "'Georgia', serif",
-fontSize: 12,
-padding: "4px 7px",
-border: "1px solid #C8BAA0",
-background: "#FDFAF5",
-borderRadius: 2,
-color: "#1A1A1A",
+<div class="main">
+  <div class="garea" id="garea">
+    <div><div class="grid" id="grid"></div></div>
+    <div id="pstrip"></div>
+  </div>
+  <div class="sb" id="sb"></div>
+</div>
+
+<script>
+// ─── STATE ──────────────────────────────────────────────────────────────────
+const S = {
+  rows:10, cols:10, grid:null, sel:null,
+  mode:'edit',
+  hist:[], hp:-1,
+  pa:null // play answers
 };
 
-const btnStyle = {
-fontFamily: "'Georgia', serif",
-fontSize: 12,
-padding: "7px 14px",
-border: "none",
-borderRadius: 2,
-cursor: "pointer",
-};
+function mkG(r,c){
+  return Array.from({length:r},()=>Array.from({length:c},()=>
+    ({t:'w',l:'',dr:'',dd:'',n:null}) // t=type(w/g), l=letter, dr=defRight, dd=defDown, n=number
+  ));
+}
+function mkP(r,c){return Array.from({length:r},()=>Array(c).fill(''));}
+function clG(g){return g.map(r=>r.map(c=>({...c})));}
+function snap(){return JSON.stringify({g:S.grid,r:S.rows,c:S.cols});}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-const labelStyle = {
-display: "block",
-fontSize: 10,
-color: "#8A7A65",
-textTransform: "uppercase",
-letterSpacing: "1px",
-marginBottom: 5,
-fontFamily: "'Georgia', serif",
-};
+// ─── HISTORY ────────────────────────────────────────────────────────────────
+function pushH(){
+  S.hist=S.hist.slice(0,S.hp+1);
+  S.hist.push(snap());
+  if(S.hist.length>80) S.hist.shift();
+  S.hp=S.hist.length-1;
+  updHBtns(); schedSave();
+}
+function doUndo(){
+  if(S.hp<=0)return;
+  S.hp--;
+  const d=JSON.parse(S.hist[S.hp]);
+  S.grid=d.g; S.rows=d.r; S.cols=d.c; S.sel=null;
+  syncSel(); render(); updHBtns();
+}
+function doRedo(){
+  if(S.hp>=S.hist.length-1)return;
+  S.hp++;
+  const d=JSON.parse(S.hist[S.hp]);
+  S.grid=d.g; S.rows=d.r; S.cols=d.c; S.sel=null;
+  syncSel(); render(); updHBtns();
+}
+function updHBtns(){
+  document.getElementById('ubtn').disabled=(S.hp<=0);
+  document.getElementById('rbtn').disabled=(S.hp>=S.hist.length-1);
+}
 
-const inputStyle = {
-fontFamily: "'Georgia', serif",
-fontSize: 13,
-padding: "7px 9px",
-border: "1px solid #C8BAA0",
-background: "#FDFAF5",
-borderRadius: 2,
-color: "#1A1A1A",
-boxSizing: "border-box",
-};
+// ─── STORAGE ────────────────────────────────────────────────────────────────
+let _st=null;
+function schedSave(){
+  clearTimeout(_st);
+  _st=setTimeout(()=>{
+    try{
+      localStorage.setItem('mf2',JSON.stringify({g:S.grid,r:S.rows,c:S.cols}));
+      const el=document.getElementById('sind');
+      if(el){el.textContent='✓ Sauvegardé';setTimeout(()=>el.textContent='',2200);}
+    }catch(e){}
+  },800);
+}
+function loadSave(){
+  try{
+    const d=localStorage.getItem('mf2');
+    if(!d)return false;
+    const p=JSON.parse(d);
+    S.rows=p.r; S.cols=p.c; S.grid=p.g;
+    for(let r=0;r<S.rows;r++) for(let c=0;c<S.cols;c++){
+      const cell=S.grid[r][c];
+      if(!('n' in cell)) cell.n=null;
+      if(!('dr' in cell)) cell.dr='';
+      if(!('dd' in cell)) cell.dd='';
+      if(!('t' in cell)) cell.t='w';
+      if(!('l' in cell)) cell.l='';
+    }
+    return true;
+  }catch(e){return false;}
+}
 
-export default function App() {
-const [rows, setRows] = useState(10);
-const [cols, setCols] = useState(10);
-const [grid, setGrid] = useState(() => createGrid(10, 10));
-const [sel, setSel] = useState(null);
-const [preview, setPreview] = useState(false);
+// ─── PHRASE SECRÈTE ──────────────────────────────────────────────────────────
+function getPE(){
+  const list=[];
+  for(let r=0;r<S.rows;r++) for(let c=0;c<S.cols;c++){
+    const cell=S.grid[r][c];
+    if(cell.t==='w'&&cell.n!==null){
+      const l=S.mode==='play'?(S.pa[r][c]||''):cell.l;
+      list.push({n:cell.n,l,r,c});
+    }
+  }
+  return list.sort((a,b)=>a.n-b.n);
+}
+function usedNums(){
+  const s=new Set();
+  for(let r=0;r<S.rows;r++) for(let c=0;c<S.cols;c++)
+    if(S.grid[r][c].n!==null) s.add(S.grid[r][c].n);
+  return s;
+}
+function nextN(){let n=1,u=usedNums();while(u.has(n))n++;return n;}
 
-const gridRef = useRef(grid);
-gridRef.current = grid;
+// ─── VALIDATION ──────────────────────────────────────────────────────────────
+function validate(){
+  const issues=[];
+  // Grey cells without definitions
+  let nd=0;
+  for(let r=0;r<S.rows;r++) for(let c=0;c<S.cols;c++){
+    const cell=S.grid[r][c];
+    if(cell.t==='g'&&!cell.dr&&!cell.dd) nd++;
+  }
+  if(nd) issues.push({t:'w',m:`${nd} case(s) grise(s) sans définition.`});
+  // Invalid arrows
+  let bad=0;
+  for(let r=0;r<S.rows;r++) for(let c=0;c<S.cols;c++){
+    const cell=S.grid[r][c];
+    if(cell.t!=='g') continue;
+    if(cell.dr&&(c+1>=S.cols||S.grid[r][c+1].t==='g')) bad++;
+    if(cell.dd&&(r+1>=S.rows||S.grid[r+1][c].t==='g')) bad++;
+  }
+  if(bad) issues.push({t:'w',m:`${bad} flèche(s) pointant dans le vide ou sur une case grise.`});
+  // Phrase number gaps
+  const nums=[...usedNums()].sort((a,b)=>a-b);
+  if(nums.length>0){
+    for(let i=0;i<nums.length;i++){
+      if(nums[i]!==i+1){issues.push({t:'w',m:`Phrase secrète : manque le numéro ${i+1}.`});break;}
+    }
+    let ml=0;
+    for(let r=0;r<S.rows;r++) for(let c=0;c<S.cols;c++)
+      if(S.grid[r][c].n!==null&&!S.grid[r][c].l) ml++;
+    if(ml) issues.push({t:'w',m:`${ml} case(s) numérotée(s) sans lettre.`});
+  }
+  // Unreachable white cells (simplified)
+  let unr=0;
+  for(let r=0;r<S.rows;r++) for(let c=0;c<S.cols;c++){
+    if(S.grid[r][c].t!=='w') continue;
+    let rh=(c===0),rv=(r===0);
+    for(let cc=c-1;cc>=0;cc--){
+      if(S.grid[r][cc].t==='g'){if(S.grid[r][cc].dr) rh=true;break;}
+    }
+    for(let rr=r-1;rr>=0;rr--){
+      if(S.grid[rr][c].t==='g'){if(S.grid[rr][c].dd) rv=true;break;}
+    }
+    if(!rh&&!rv) unr++;
+  }
+  if(unr) issues.push({t:'w',m:`${unr} case(s) blanche(s) sans définition entrante (potentiellement inatteignables).`});
+  if(!issues.length) issues.push({t:'ok',m:'Aucun problème détecté. ✓'});
+  return issues;
+}
 
-const selectedCell = sel ? grid[sel.r][sel.c] : null;
+// ─── RESIZE ──────────────────────────────────────────────────────────────────
+function resizeGrid(nr,nc){
+  const og=S.grid;
+  const ng=mkG(nr,nc);
+  for(let r=0;r<Math.min(nr,S.rows);r++)
+    for(let c=0;c<Math.min(nc,S.cols);c++)
+      ng[r][c]={...og[r][c]};
+  S.rows=nr; S.cols=nc; S.grid=ng; S.sel=null;
+  pushH(); syncSel(); render();
+}
+function syncSel(){
+  document.getElementById('rsel').value=S.rows;
+  document.getElementById('csel').value=S.cols;
+}
+function buildOpts(){
+  const sizes=[5,6,7,8,9,10,11,12,13,14,15];
+  ['rsel','csel'].forEach(id=>{
+    const el=document.getElementById(id);
+    el.innerHTML=sizes.map(n=>`<option value="${n}">${n}</option>`).join('');
+  });
+  document.getElementById('rsel').onchange=e=>resizeGrid(+e.target.value,S.cols);
+  document.getElementById('csel').onchange=e=>resizeGrid(S.rows,+e.target.value);
+  syncSel();
+}
 
-function updateCell(r, c, updates) {
-setGrid(g => {
-const ng = deepCopy(g);
-ng[r][c] = { ...ng[r][c], ...updates };
-return ng;
+// ─── CELL OPS ────────────────────────────────────────────────────────────────
+function togType(r,c){
+  const cell=S.grid[r][c];
+  if(cell.t==='w') Object.assign(cell,{t:'g',l:'',n:null});
+  else Object.assign(cell,{t:'w',dr:'',dd:''});
+  pushH(); render();
+}
+function setL(r,c,v){
+  S.grid[r][c].l=v.toUpperCase();
+  pushH(); renderGrid(); renderStrip(); renderSB();
+}
+function setPL(r,c,v){
+  S.pa[r][c]=v.toUpperCase();
+  renderGrid(); renderStrip();
+}
+let _dt=null;
+function setDR(r,c,v){S.grid[r][c].dr=v;renderGrid();clearTimeout(_dt);_dt=setTimeout(()=>{pushH();},900);schedSave();}
+function setDD(r,c,v){S.grid[r][c].dd=v;renderGrid();clearTimeout(_dt);_dt=setTimeout(()=>{pushH();},900);schedSave();}
+function setN(r,c,n){
+  if(n!==null){
+    for(let rr=0;rr<S.rows;rr++) for(let cc=0;cc<S.cols;cc++)
+      if(!(rr===r&&cc===c)&&S.grid[rr][cc].n===n) S.grid[rr][cc].n=null;
+  }
+  S.grid[r][c].n=n;
+  pushH(); render();
+}
+function doClear(){
+  if(!confirm('Effacer toute la grille ?')) return;
+  S.grid=mkG(S.rows,S.cols); S.sel=null; pushH(); render();
+}
+
+// ─── MODE ────────────────────────────────────────────────────────────────────
+function setMode(m){
+  S.mode=m;
+  if(m==='play') S.pa=mkP(S.rows,S.cols);
+  S.sel=null;
+  ['me','mp','ms'].forEach(id=>document.getElementById(id).className='btn bsm blt');
+  const map={edit:'me',play:'mp',sol:'ms'};
+  document.getElementById(map[m]).className='btn bsm bon';
+  const b=document.getElementById('mbanner');
+  if(m==='edit'){b.style.display='none';}
+  else if(m==='play'){b.style.display='block';b.className='mbanner play';b.textContent='▶ Mode Jeu — Remplissez les cases blanches';}
+  else{b.style.display='block';b.className='mbanner sol';b.textContent='★ Solution complète';}
+  render();
+}
+
+// ─── KEYBOARD ────────────────────────────────────────────────────────────────
+document.addEventListener('keydown',e=>{
+  const ctrl=e.ctrlKey||e.metaKey;
+  if(ctrl&&e.key==='z'&&!e.shiftKey){e.preventDefault();doUndo();return;}
+  if(ctrl&&(e.key==='y'||(e.key==='z'&&e.shiftKey))){e.preventDefault();doRedo();return;}
+  if(!S.sel) return;
+  const {r,c}=S.sel;
+  const cell=S.grid[r][c];
+  if(e.key==='Escape'){S.sel=null;renderGrid();renderSB();return;}
+  if(e.key===' '&&S.mode==='edit'){e.preventDefault();togType(r,c);return;}
+  const nav={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]};
+  if(nav[e.key]){
+    e.preventDefault();
+    const [dr,dc]=nav[e.key];
+    S.sel={r:Math.max(0,Math.min(S.rows-1,r+dr)),c:Math.max(0,Math.min(S.cols-1,c+dc))};
+    renderGrid();renderSB();return;
+  }
+  if(e.key==='Tab'){
+    e.preventDefault();
+    let nc=c+1,nr=r;
+    if(nc>=S.cols){nc=0;nr=(nr+1)%S.rows;}
+    S.sel={r:nr,c:nc};renderGrid();renderSB();return;
+  }
+  if(cell.t!=='w') return;
+  if(e.key==='Backspace'||e.key==='Delete'){
+    e.preventDefault();
+    if(S.mode==='edit') setL(r,c,'');
+    else if(S.mode==='play') setPL(r,c,'');
+    return;
+  }
+  if(e.key.length===1&&/^[a-zA-ZÀ-ÿ]$/.test(e.key)){
+    e.preventDefault();
+    if(S.mode==='edit') setL(r,c,e.key);
+    else if(S.mode==='play') setPL(r,c,e.key);
+    // advance right skipping grey cells
+    let nc=c+1;
+    while(nc<S.cols&&S.grid[r][nc].t==='g') nc++;
+    if(nc<S.cols){S.sel={r,c:nc};renderGrid();renderSB();}
+  }
 });
+
+// ─── CLICK ───────────────────────────────────────────────────────────────────
+function clickCell(r,c){
+  if(S.sel&&S.sel.r===r&&S.sel.c===c) S.sel=null;
+  else S.sel={r,c};
+  renderGrid();renderSB();
 }
 
-function handleCellClick(r, c) {
-if (preview) return;
-setSel(prev => (prev?.r === r && prev?.c === c ? null : { r, c }));
+// ─── RENDER ──────────────────────────────────────────────────────────────────
+function render(){renderGrid();renderSB();renderStrip();}
+
+function renderGrid(){
+  const el=document.getElementById('grid');
+  el.style.gridTemplateColumns=`repeat(${S.cols},var(--cs))`;
+  const {grid,sel,mode,pa}=S;
+  const parts=[];
+  for(let r=0;r<S.rows;r++) for(let c=0;c<S.cols;c++){
+    const cell=grid[r][c];
+    const isSel=sel&&sel.r===r&&sel.c===c;
+    const isHL=sel&&(sel.r===r||sel.c===c)&&cell.t==='w'&&!isSel&&mode==='edit';
+    let cls=`cell ${cell.t==='w'?'white':'grey'}`;
+    if(isSel) cls+=' sel';
+    if(isHL) cls+=' hl';
+    if(cell.t==='w'&&cell.n!==null) cls+=' numbered';
+    let inner='';
+    if(cell.t==='w'){
+      let l='',lcls='cltr';
+      if(mode==='edit'||mode==='sol'){l=cell.l;}
+      else if(mode==='play'){
+        l=pa[r][c]||'';
+        lcls='cltr pl';
+        if(l&&cell.l){lcls=l===cell.l?'cltr ok':'cltr ko';}
+      }
+      if(l) inner+=`<span class="${lcls}">${l}</span>`;
+      if(cell.n!==null) inner+=`<span class="cnum">${cell.n}</span>`;
+    } else {
+      const both=cell.dr&&cell.dd;
+      inner='<div class="cdef">';
+      if(both) inner+=`<svg class="cddiv" viewBox="0 0 58 58" preserveAspectRatio="none"><line x1="0" y1="0" x2="58" y2="58" stroke="white" stroke-width="1"/></svg>`;
+      if(cell.dr) inner+=`<div class="cdt"><span class="cdtxt" title="${esc(cell.dr)}">${esc(cell.dr)}</span><span class="cdarr">→</span></div>`;
+      if(cell.dd) inner+=`<div class="cdb"><span class="cdtxt" title="${esc(cell.dd)}">${esc(cell.dd)}</span><span class="cdarr">↓</span></div>`;
+      inner+='</div>';
+    }
+    parts.push(`<div class="${cls}" onclick="clickCell(${r},${c})">${inner}</div>`);
+  }
+  el.innerHTML=parts.join('');
 }
 
-function toggleCellType() {
-if (!sel) return;
-const { r, c } = sel;
-const cell = gridRef.current[r][c];
-updateCell(r, c, {
-type: cell.type === "white" ? "grey" : "white",
-letter: "", defR: "", defD: "",
-});
+function renderSB(){
+  const sb=document.getElementById('sb');
+  const {sel,mode,grid}=S;
+  if(mode!=='edit'){
+    sb.innerHTML=`<div class="sempty">${mode==='play'?'Tapez vos réponses dans les cases blanches.<br><br>Les cases numérotées complèteront<br>la phrase secrète en bas.':'Toutes les réponses sont révélées.'}</div>`;
+    valBlock(sb); return;
+  }
+  if(!sel){
+    sb.innerHTML=`<div class="sempty">Cliquez une case pour l'éditer.<br><br>
+      <strong>Raccourcis :</strong><br>
+      <kbd>Espace</kbd> Basculer blanc/gris<br>
+      <kbd>↑↓←→</kbd> Naviguer<br>
+      <kbd>Tab</kbd> Avancer<br>
+      <kbd>Ctrl+Z</kbd> Annuler<br>
+      <kbd>Ctrl+Y</kbd> Refaire
+    </div>`;
+    valBlock(sb); return;
+  }
+  const {r,c}=sel;
+  const cell=grid[r][c];
+  let h=`<div class="ss"><div class="stitle">Case (${r+1}, ${c+1})</div>
+    <div class="ttog">
+      <button class="${cell.t==='w'?'on':''}" onclick="togType(${r},${c})">□ Blanche</button>
+      <button class="${cell.t==='g'?'on':''}" onclick="togType(${r},${c})">■ Grise</button>
+    </div>`;
+  if(cell.t==='w'){
+    h+=`<div class="fg"><label class="fl">Lettre</label>
+      <input class="fi fi-l" maxlength="1" value="${esc(cell.l)}"
+        oninput="setL(${r},${c},this.value)" placeholder="A" autofocus>
+    </div>`;
+    const hasN=cell.n!==null;
+    const nn=nextN();
+    h+=`<div class="fg"><label class="fl">Numéro — phrase secrète</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        ${hasN
+          ?`<input class="fi fi-n" type="number" min="1" max="99" value="${cell.n}"
+              oninput="setN(${r},${c},+this.value||null)" style="width:72px">
+            <button class="btn blt bsm" onclick="setN(${r},${c},null)">✕ Retirer</button>`
+          :`<button class="btn blt bsm" onclick="setN(${r},${c},${nn})">⊕ Numéroter (n°${nn})</button>`
+        }
+      </div>
+      ${hasN?`<div style="font-size:11px;color:var(--inkf);margin-top:5px;font-style:italic">Cette case contribue à la phrase secrète en position ${cell.n}.</div>`:''}
+    </div>`;
+  } else {
+    h+=`<div class="fg"><label class="fl">Définition → (droite)</label>
+      <textarea class="fta" rows="2" oninput="setDR(${r},${c},this.value)"
+        placeholder="Ex : Liquide vital…">${esc(cell.dr)}</textarea>
+    </div>
+    <div class="fg"><label class="fl">Définition ↓ (bas)</label>
+      <textarea class="fta" rows="2" oninput="setDD(${r},${c},this.value)"
+        placeholder="Ex : Capital de la France…">${esc(cell.dd)}</textarea>
+    </div>
+    <div style="font-size:11px;color:var(--inkf);font-style:italic;line-height:1.55">
+      Deux définitions = ligne diagonale automatique.
+    </div>`;
+  }
+  h+=`</div>`;
+  sb.innerHTML=h;
+  valBlock(sb);
 }
 
-useEffect(() => {
-function handleKey(e) {
-const currentSel = sel;
-if (!currentSel || preview) return;
-const cell = gridRef.current[currentSel.r][currentSel.c];
-if (cell.type !== "white") return;
-if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Tab"].includes(e.key)) {
-e.preventDefault();
-}
-if (e.key === "Backspace") {
-e.preventDefault();
-updateCell(currentSel.r, currentSel.c, { letter: "" });
-} else if (e.key.length === 1 && /^[a-zA-ZÀ-ÿ]$/.test(e.key)) {
-updateCell(currentSel.r, currentSel.c, { letter: e.key.toUpperCase() });
-// advance to next white cell on the right
-let nc = currentSel.c + 1;
-while (nc < cols && gridRef.current[currentSel.r][nc].type === "grey") nc++;
-if (nc < cols) setSel({ r: currentSel.r, c: nc });
-} else if (e.key === "Delete") {
-updateCell(currentSel.r, currentSel.c, { letter: "" });
-} else if (e.key === "ArrowRight" && currentSel.c < cols - 1) {
-setSel({ r: currentSel.r, c: currentSel.c + 1 });
-} else if (e.key === "ArrowLeft" && currentSel.c > 0) {
-setSel({ r: currentSel.r, c: currentSel.c - 1 });
-} else if (e.key === "ArrowDown" && currentSel.r < rows - 1) {
-setSel({ r: currentSel.r + 1, c: currentSel.c });
-} else if (e.key === "ArrowUp" && currentSel.r > 0) {
-setSel({ r: currentSel.r - 1, c: currentSel.c });
-} else if (e.key === "Tab") {
-e.preventDefault();
-let nc = currentSel.c + 1, nr = currentSel.r;
-if (nc >= cols) { nc = 0; nr = (nr + 1) % rows; }
-setSel({ r: nr, c: nc });
-}
-}
-window.addEventListener("keydown", handleKey);
-return () => window.removeEventListener("keydown", handleKey);
-}, [sel, preview, rows, cols]);
-
-function resizeGrid(newRows, newCols) {
-setRows(newRows); setCols(newCols);
-setGrid(prev => {
-const ng = createGrid(newRows, newCols);
-for (let r = 0; r < Math.min(newRows, prev.length); r++)
-for (let c = 0; c < Math.min(newCols, prev[0].length); c++)
-ng[r][c] = { ...prev[r][c] };
-return ng;
-});
-setSel(null);
+function valBlock(container){
+  const issues=validate();
+  let h=`<div class="ss"><div class="stitle">⚑ Vérification</div>`;
+  issues.forEach(i=>{
+    const icon=i.t==='w'?'⚠':i.t==='e'?'✕':'✓';
+    h+=`<div class="vi ${i.t}"><span>${icon}</span><span>${i.m}</span></div>`;
+  });
+  h+=`</div>`;
+  container.innerHTML+=h;
 }
 
-return (
-<div style={{
-fontFamily: "'Georgia', serif",
-background: "#F5F0E6",
-minHeight: "100vh",
-padding: "24px 28px",
-}}>
-<style>{`
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&display=swap');
-* { box-sizing: border-box; }
-textarea { resize: vertical; }
-button:hover { opacity: 0.88; }
-`}</style>
-
-{/* Header */}
-<div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between",
-borderBottom: "2px solid #1A1A1A", paddingBottom: 14, marginBottom: 22 }}>
-<div>
-<h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, fontWeight: 900,
-color: "#1A1A1A", margin: 0, letterSpacing: "-0.5px" }}>
-Mots Fléchés
-</h1>
-<p style={{ margin: "2px 0 0", fontSize: 12, color: "#8A7A65", fontStyle: "italic" }}>
-Éditeur de grille interactif
-</p>
-</div>
-<div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-<label style={{ fontSize: 12, color: "#6A5A45" }}>
-Lignes&nbsp;
-<select value={rows} onChange={e => resizeGrid(+e.target.value, cols)} style={selectStyle}>
-{[5,6,7,8,9,10,12,13,15].map(n => <option key={n}>{n}</option>)}
-</select>
-</label>
-<label style={{ fontSize: 12, color: "#6A5A45" }}>
-Colonnes&nbsp;
-<select value={cols} onChange={e => resizeGrid(rows, +e.target.value)} style={selectStyle}>
-{[5,6,7,8,9,10,12,13,15].map(n => <option key={n}>{n}</option>)}
-</select>
-</label>
-<button
-onClick={() => { setGrid(createGrid(rows, cols)); setSel(null); }}
-style={{ ...btnStyle, background: "#7A6A55", color: "#FFF" }}>
-Effacer tout
-</button>
-<button
-onClick={() => { setPreview(p => !p); setSel(null); }}
-style={{ ...btnStyle, background: preview ? "#C8A400" : "#1A1A1A", color: "#FFF", fontWeight: "bold" }}>
-{preview ? "✎ Éditer" : "👁 Aperçu"}
-</button>
-</div>
-</div>
-
-{/* Main area */}
-<div style={{ display: "flex", gap: 28, alignItems: "flex-start", flexWrap: "wrap" }}>
-
-{/* Grid */}
-<div>
-<div style={{
-display: "inline-grid",
-gridTemplateColumns: `repeat(${cols}, ${CELL_SIZE}px)`,
-border: "2px solid #1A1A1A",
-boxShadow: "5px 5px 0 #1A1A1A",
-}}>
-{grid.map((row, r) =>
-row.map((cell, c) => (
-<GridCell
-key={`${r}-${c}`}
-cell={cell}
-size={CELL_SIZE}
-isSelected={!preview && sel?.r === r && sel?.c === c}
-isPreview={preview}
-onClick={() => handleCellClick(r, c)}
-/>
-))
-)}
-</div>
-{!preview && (
-<p style={{ marginTop: 8, fontSize: 11, color: "#8A7A65", fontStyle: "italic" }}>
-Cliquez pour sélectionner · Tapez une lettre · Flèches pour naviguer
-</p>
-)}
-{preview && (
-<p style={{ marginTop: 8, fontSize: 11, color: "#8A7A65", fontStyle: "italic" }}>
-Mode aperçu — cliquez sur « Éditer » pour modifier la grille
-</p>
-)}
-</div>
-
-{/* Side panel: cell editor */}
-{!preview && selectedCell && (
-<div style={{
-background: "#FDFAF4",
-border: "1px solid #C8BAA0",
-borderRadius: 3,
-padding: 20,
-minWidth: 250,
-maxWidth: 290,
-boxShadow: "3px 3px 0 #C8BAA0",
-}}>
-<div style={{ fontSize: 10, color: "#8A7A65", marginBottom: 12,
-textTransform: "uppercase", letterSpacing: "1.2px" }}>
-Case ({sel.r + 1}, {sel.c + 1})
-</div>
-
-{/* Toggle type */}
-<div style={{ display: "flex", marginBottom: 18, border: "1px solid #1A1A1A",
-borderRadius: 2, overflow: "hidden" }}>
-{[["white", "□ Blanche"], ["grey", "■ Grise"]].map(([t, label]) => (
-<button
-key={t}
-onClick={() => selectedCell.type !== t && toggleCellType()}
-style={{
-flex: 1, padding: "9px 0", fontSize: 12, border: "none", cursor: "pointer",
-fontFamily: "'Georgia', serif",
-background: selectedCell.type === t ? "#1A1A1A" : "#F0EBE0",
-color: selectedCell.type === t ? "#FFF" : "#5A4A35",
-}}>
-{label}
-</button>
-))}
-</div>
-
-{selectedCell.type === "white" && (
-<div>
-<label style={labelStyle}>Lettre</label>
-<input
-maxLength={1}
-value={selectedCell.letter}
-onChange={e => {
-const v = e.target.value.toUpperCase();
-if (/^[A-ZÀ-Ÿ]?$/.test(v)) updateCell(sel.r, sel.c, { letter: v });
-}}
-style={{
-...inputStyle, fontSize: 28, textAlign: "center",
-fontFamily: "'Courier New', monospace", fontWeight: "bold",
-width: "100%", letterSpacing: 4,
-}}
-placeholder="A"
-autoFocus
-/>
-<p style={{ fontSize: 11, color: "#8A7A65", fontStyle: "italic", marginTop: 8 }}>
-Ou tapez directement sur la grille après sélection.
-</p>
-</div>
-)}
-
-{selectedCell.type === "grey" && (
-<div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-<div>
-<label style={labelStyle}>Définition → (vers la droite)</label>
-<textarea
-rows={2}
-value={selectedCell.defR}
-onChange={e => updateCell(sel.r, sel.c, { defR: e.target.value })}
-placeholder="Ex : Liquide vital…"
-style={{ ...inputStyle, width: "100%", fontSize: 12 }}
-/>
-</div>
-<div>
-<label style={labelStyle}>Définition ↓ (vers le bas)</label>
-<textarea
-rows={2}
-value={selectedCell.defD}
-onChange={e => updateCell(sel.r, sel.c, { defD: e.target.value })}
-placeholder="Ex : Capitale de la France…"
-style={{ ...inputStyle, width: "100%", fontSize: 12 }}
-/>
-</div>
-<p style={{ fontSize: 11, color: "#8A7A65", fontStyle: "italic", margin: 0 }}>
-Une case grise peut porter deux définitions simultanées.
-</p>
-</div>
-)}
-</div>
-)}
-
-{/* Help panel when nothing is selected */}
-{!preview && !sel && (
-<div style={{
-background: "#FDFAF4",
-border: "1px dashed #C8BAA0",
-borderRadius: 3,
-padding: 20,
-minWidth: 220,
-maxWidth: 260,
-}}>
-<div style={{ fontFamily: "'Playfair Display', serif", fontSize: 16,
-color: "#1A1A1A", marginBottom: 14, fontWeight: 700 }}>
-Guide rapide
-</div>
-{[
-["🖱", "Cliquez une case pour la sélectionner"],
-["⬜", "Case blanche = lettre de réponse"],
-["⬛", "Case grise = définition + flèche(s)"],
-["⌨️", "Tapez directement pour saisir une lettre"],
-["↕↔", "Flèches clavier pour naviguer"],
-["👁", "Aperçu pour voir la grille finale"],
-].map(([icon, text]) => (
-<div key={icon} style={{ fontSize: 12, color: "#4A3A2A", marginBottom: 8,
-display: "flex", gap: 8, alignItems: "flex-start", lineHeight: 1.4 }}>
-<span style={{ flexShrink: 0 }}>{icon}</span>
-<span>{text}</span>
-</div>
-))}
-</div>
-)}
-</div>
-</div>
-);
+function renderStrip(){
+  const entries=getPE();
+  const el=document.getElementById('pstrip');
+  if(!entries.length){el.innerHTML='';return;}
+  let boxes='<div class="pboxes">';
+  entries.forEach(e=>{
+    boxes+=`<div class="pbox ${e.l?'lit':''}">
+      <span class="pbox-n">${e.n}</span>
+      <span class="pbox-l">${e.l||'&nbsp;'}</span>
+    </div>`;
+  });
+  boxes+='</div>';
+  el.innerHTML=`<div class="pstrip"><span class="plbl">Phrase secrète</span>${boxes}</div>`;
 }
+
+// ─── PRINT ───────────────────────────────────────────────────────────────────
+function printGrid(){window.print();}
+
+// ─── EXPORT ──────────────────────────────────────────────────────────────────
+function exportPlayer(){
+  const {grid,rows,cols}=S;
+  const sol=[];
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) sol.push(grid[r][c].l||' ');
+  const solEnc=btoa(unescape(encodeURIComponent(sol.join('§'))));
+  const pGrid=clG(grid).map(row=>row.map(cell=>({t:cell.t,dr:cell.dr,dd:cell.dd,n:cell.n,l:''})));
+  const payload=JSON.stringify({g:pGrid,r:rows,c:cols,s:solEnc});
+  const html=buildPlayerHTML(payload);
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='mots-fleches.html';
+  a.click();
+}
+
+function buildPlayerHTML(payload){
+  const SO='<'+'script>';
+  const SC='<'+'/script>';
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Mots Fléchés</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Courier+Prime:wght@400;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#1C1710;--gc:#1E1E1E;--gt:#D8D0C4;--gold:#B8960C;--gm:#D4AE30;--p:#F4EFE4;--cs:58px;--mono:'Courier Prime','Courier New',monospace;--body:'EB Garamond',Georgia,serif;--serif:'Playfair Display',serif}
+body{background:var(--p);color:var(--ink);font-family:var(--body);padding:22px;min-height:100vh}
+h1{font-family:var(--serif);font-size:26px;font-weight:900;margin-bottom:3px}
+.sub{font-size:11px;font-style:italic;color:#8A7A65;letter-spacing:1px;margin-bottom:20px}
+.grid{display:inline-grid;border:2.5px solid var(--ink);box-shadow:5px 5px 0 var(--ink);line-height:0;margin-bottom:20px;user-select:none}
+.cell{width:var(--cs);height:var(--cs);border:1px solid #383838;position:relative;overflow:hidden}
+.cell.w{background:#FFF;cursor:text}.cell.g{background:var(--gc)}
+.cell.ok{background:#EAFAEA}.cell.ko{background:#FAEAEA}
+.cinput{position:absolute;inset:0;width:100%;height:100%;border:none;outline:none;background:transparent;text-align:center;font-family:var(--mono);font-size:23px;font-weight:700;color:#1A4080;text-transform:uppercase;padding:0;cursor:text}
+.cinput.ok{color:#1A5A1A}.cinput.ko{color:#8A1C1C}
+.cnum{position:absolute;bottom:3px;right:4px;font-size:10px;font-weight:700;font-family:var(--body);color:var(--gold);z-index:3;pointer-events:none}
+.cdef{position:absolute;inset:2px 3px;display:flex;flex-direction:column;justify-content:space-between;pointer-events:none}
+.cdt,.cdb{display:flex;align-items:flex-start;justify-content:space-between;gap:2px;max-height:52%;overflow:hidden}
+.cdb{align-items:flex-end}
+.cdtxt{font-size:7px;line-height:1.25;color:var(--gt);font-family:var(--body);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;flex:1}
+.cdarr{font-size:11px;color:var(--gm);font-weight:700;flex-shrink:0}
+.cell.numbered::before{content:'';position:absolute;top:3px;left:3px;width:6px;height:6px;border-radius:50%;background:var(--gold);opacity:.6;z-index:4}
+.pstrip{background:var(--ink);padding:13px 20px;border:2.5px solid var(--ink);border-radius:2px;box-shadow:4px 4px 0 var(--ink);display:flex;align-items:center;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+.plbl{font-family:var(--serif);font-size:11px;color:#7A6A55;text-transform:uppercase;letter-spacing:2px;white-space:nowrap}
+.pboxes{display:flex;gap:4px;flex-wrap:wrap;align-items:flex-end}
+.pbox{width:36px;height:44px;background:#252515;border:1.5px solid #605A40;border-radius:1px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:4px;position:relative;transition:all .2s}
+.pbox-n{position:absolute;top:3px;font-size:9px;font-weight:700;font-family:var(--body);color:var(--gm)}
+.pbox-l{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--gm);line-height:1}
+.pbox.lit{border-color:var(--gold);background:#2C2200}.pbox.lit .pbox-l{color:#FFD740}
+.btns{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.btn{font-family:var(--body);font-size:14px;padding:9px 20px;border-radius:2px;cursor:pointer;border:1.5px solid;transition:all .12s}
+.bv{background:var(--ink);color:var(--p);border-color:var(--ink)}.bv:hover{background:#352510}
+.br{background:transparent;color:#8A1C1C;border-color:#D4AAAA}.br:hover{background:#FFF0F0}
+.bg{background:transparent;color:#1A5A1A;border-color:#AAD4AA}.bg:hover{background:#F0FFF0}
+.msg{font-size:15px;font-style:italic;color:#5A4A35;margin-top:4px;min-height:22px}
+.score{font-family:var(--serif);font-size:18px;font-weight:700;color:var(--ink);margin-top:6px}
+@media print{.btns,.msg,.score{display:none}}
+</style>
+</head>
+<body>
+<h1>Mots Fléchés</h1>
+<div class="sub">Remplissez les cases blanches — les cases numérotées révèlent la phrase secrète</div>
+<div class="grid" id="grid"></div>
+<div id="pstrip"></div>
+<div class="btns">
+  <button class="btn bv" onclick="check()">✓ Vérifier</button>
+  <button class="btn bg" onclick="reveal()">★ Révéler</button>
+  <button class="btn br" onclick="reset()">↺ Recommencer</button>
+</div>
+<div class="msg" id="msg"></div>
+<div class="score" id="score"></div>
+${SO}
+const D=${payload};
+const {g:grid,r:rows,c:cols}=D;
+const ans={};
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function rg(){
+  const el=document.getElementById('grid');
+  el.style.gridTemplateColumns='repeat('+cols+',var(--cs))';
+  const parts=[];
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+    const cell=grid[r][c];
+    let cls='cell '+(cell.t==='w'?'w':'g');
+    if(cell.t==='w'&&cell.n!==null) cls+=' numbered';
+    let inner='';
+    if(cell.t==='w'){
+      const v=ans[r+','+c]||'';
+      inner='<input class="cinput" maxlength="1" value="'+esc(v)+'" data-r="'+r+'" data-c="'+c+'" oninput="inp(event,'+r+','+c+')" onkeydown="kd(event,'+r+','+c+')">';
+      if(cell.n!==null) inner+='<span class="cnum">'+cell.n+'</span>';
+    } else {
+      const both=cell.dr&&cell.dd;
+      inner='<div class="cdef">';
+      if(both) inner+='<svg style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.25" viewBox="0 0 58 58" preserveAspectRatio="none"><line x1="0" y1="0" x2="58" y2="58" stroke="white" stroke-width="1"/></svg>';
+      if(cell.dr) inner+='<div class="cdt"><span class="cdtxt" title="'+esc(cell.dr)+'">'+esc(cell.dr)+'</span><span class="cdarr">→</span></div>';
+      if(cell.dd) inner+='<div class="cdb"><span class="cdtxt" title="'+esc(cell.dd)+'">'+esc(cell.dd)+'</span><span class="cdarr">↓</span></div>';
+      inner+='</div>';
+    }
+    parts.push('<div class="'+cls+'" onclick="fc('+r+','+c+')">'+inner+'</div>');
+  }
+  el.innerHTML=parts.join('');
+  upStrip();
+}
+function fc(r,c){const inp=document.querySelector('[data-r="'+r+'"][data-c="'+c+'"]');if(inp)inp.focus();}
+function inp(e,r,c){
+  let v=e.target.value.replace(/[^a-zA-ZÀ-ÿ]/g,'').slice(-1).toUpperCase();
+  e.target.value=v; ans[r+','+c]=v; upStrip();
+  if(v){let nc=c+1;while(nc<cols&&grid[r][nc].t==='g')nc++;if(nc<cols)fc(r,nc);}
+}
+function kd(e,r,c){
+  const n={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]};
+  if(n[e.key]){e.preventDefault();const[dr,dc]=n[e.key];fc(Math.max(0,Math.min(rows-1,r+dr)),Math.max(0,Math.min(cols-1,c+dc)));return;}
+  if(e.key==='Backspace'&&!e.target.value){ans[r+','+c]='';upStrip();}
+  if(e.key==='Tab'){e.preventDefault();let nc=c+1,nr=r;if(nc>=cols){nc=0;nr=(nr+1)%rows;}fc(nr,nc);}
+}
+function upStrip(){
+  const list=[];
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+    const cell=grid[r][c];
+    if(cell.t==='w'&&cell.n!==null) list.push({n:cell.n,l:ans[r+','+c]||''});
+  }
+  list.sort((a,b)=>a.n-b.n);
+  if(!list.length){document.getElementById('pstrip').innerHTML='';return;}
+  let h='<div class="pstrip"><span class="plbl">Phrase secrète</span><div class="pboxes">';
+  list.forEach(e=>{h+='<div class="pbox '+(e.l?'lit':'')+'"><span class="pbox-n">'+e.n+'</span><span class="pbox-l">'+(e.l||'&nbsp;')+'</span></div>';});
+  h+='</div></div>';
+  document.getElementById('pstrip').innerHTML=h;
+}
+function getSol(){
+  try{
+    const parts=decodeURIComponent(escape(atob(D.s))).split('§');
+    const sol={};let i=0;
+    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){sol[r+','+c]=parts[i]||'';i++;}
+    return sol;
+  }catch(e){return {};}
+}
+function check(){
+  const sol=getSol();
+  let ok=0,tot=0,err=0;
+  document.querySelectorAll('.cinput').forEach(inp=>{
+    const r=+inp.dataset.r,c=+inp.dataset.c,key=r+','+c;
+    const a=(ans[key]||'').toUpperCase(),x=(sol[key]||'').toUpperCase();
+    if(!x){inp.className='cinput';inp.parentElement.className=inp.parentElement.className.replace(/ ok| ko/g,'');return;}
+    tot++;
+    const correct=(a===x);
+    inp.className='cinput '+(correct?'ok':'ko');
+    inp.parentElement.className=inp.parentElement.className.replace(/ ok| ko/g,'')+(correct?' ok':' ko');
+    if(correct)ok++;else err++;
+  });
+  const msg=document.getElementById('msg');
+  const sc=document.getElementById('score');
+  if(err===0&&ok===tot){msg.textContent='🎉 Félicitations ! Grille entièrement résolue.';sc.textContent='';}
+  else{msg.textContent=err?' Certaines cases sont incorrectes.':'';sc.textContent=ok+' / '+tot+' bonnes réponses';}
+}
+function reveal(){
+  const sol=getSol();
+  Object.keys(sol).forEach(k=>{ans[k]=sol[k];});
+  rg(); document.getElementById('msg').textContent='Solution révélée.';document.getElementById('score').textContent='';
+}
+function reset(){
+  Object.keys(ans).forEach(k=>delete ans[k]);
+  rg(); document.getElementById('msg').textContent='';document.getElementById('score').textContent='';
+}
+rg();
+${SC}
+</body>
+</html>`;
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+function init(){
+  buildOpts();
+  if(!loadSave()) S.grid=mkG(S.rows,S.cols);
+  S.pa=mkP(S.rows,S.cols);
+  pushH();
+  setMode('edit');
+}
+init();
+</script>
+</body>
+</html>
