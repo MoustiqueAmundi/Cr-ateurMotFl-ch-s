@@ -1,0 +1,447 @@
+import { useState, useEffect, useRef } from "react";
+
+const CELL_SIZE = 52;
+
+function createGrid(rows, cols) {
+return Array.from({ length: rows }, () =>
+Array.from({ length: cols }, () => ({
+type: "white",
+letter: "",
+defR: "",
+defD: "",
+}))
+);
+}
+
+function deepCopy(g) {
+return g.map(row => row.map(cell => ({ ...cell })));
+}
+
+function GridCell({ cell, size, isSelected, isPreview, onClick }) {
+const isGrey = cell.type === "grey";
+const hasBoth = isGrey && cell.defR && cell.defD;
+
+const border = `1px solid ${isPreview ? "#1A1A1A" : "#2A2A2A"}`;
+const selectionRing = isSelected
+? { outline: "2.5px solid #C8A400", outlineOffset: "-2.5px", zIndex: 1 }
+: {};
+
+if (isGrey) {
+return (
+<div
+onClick={onClick}
+style={{
+width: size, height: size, border,
+background: isSelected ? "#3A2800" : "#2F2F2F",
+position: "relative", overflow: "hidden",
+cursor: isPreview ? "default" : "pointer",
+userSelect: "none", flexShrink: 0,
+...selectionRing,
+}}
+>
+{hasBoth && (
+<svg style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
+<line x1="0" y1="0" x2={size} y2={size} stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
+</svg>
+)}
+{cell.defR && (
+<div style={{
+position: "absolute",
+top: hasBoth ? 2 : "50%",
+transform: hasBoth ? "none" : "translateY(-50%)",
+left: 3, right: 3,
+display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+fontSize: Math.max(7, Math.floor(size / 7.5)),
+lineHeight: 1.15,
+color: "#E8E0D0",
+fontFamily: "'Georgia', serif",
+}}>
+<span style={{ flex: 1, wordBreak: "break-word", overflow: "hidden",
+display: "-webkit-box", WebkitLineClamp: hasBoth ? 2 : 3, WebkitBoxOrient: "vertical" }}>
+{cell.defR}
+</span>
+<span style={{ color: "#FFD700", fontWeight: "bold", marginLeft: 2, flexShrink: 0 }}>→</span>
+</div>
+)}
+{cell.defD && (
+<div style={{
+position: "absolute",
+bottom: 2, left: 3, right: 3,
+display: "flex", justifyContent: "space-between", alignItems: "flex-end",
+fontSize: Math.max(7, Math.floor(size / 7.5)),
+lineHeight: 1.15,
+color: "#E8E0D0",
+fontFamily: "'Georgia', serif",
+}}>
+<span style={{ flex: 1, wordBreak: "break-word", overflow: "hidden",
+display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+{cell.defD}
+</span>
+<span style={{ color: "#FFD700", fontWeight: "bold", marginLeft: 2, flexShrink: 0 }}>↓</span>
+</div>
+)}
+</div>
+);
+}
+
+return (
+<div
+onClick={onClick}
+style={{
+width: size, height: size, border,
+background: isSelected ? "#FFFBEE" : "#FFFFFF",
+position: "relative", flexShrink: 0,
+cursor: isPreview ? "default" : "pointer",
+userSelect: "none",
+display: "flex", alignItems: "center", justifyContent: "center",
+...selectionRing,
+}}
+>
+<span style={{
+fontSize: Math.floor(size * 0.46),
+fontFamily: "'Courier New', monospace",
+fontWeight: "bold",
+color: "#111",
+}}>
+{cell.letter}
+</span>
+</div>
+);
+}
+
+const selectStyle = {
+fontFamily: "'Georgia', serif",
+fontSize: 12,
+padding: "4px 7px",
+border: "1px solid #C8BAA0",
+background: "#FDFAF5",
+borderRadius: 2,
+color: "#1A1A1A",
+};
+
+const btnStyle = {
+fontFamily: "'Georgia', serif",
+fontSize: 12,
+padding: "7px 14px",
+border: "none",
+borderRadius: 2,
+cursor: "pointer",
+};
+
+const labelStyle = {
+display: "block",
+fontSize: 10,
+color: "#8A7A65",
+textTransform: "uppercase",
+letterSpacing: "1px",
+marginBottom: 5,
+fontFamily: "'Georgia', serif",
+};
+
+const inputStyle = {
+fontFamily: "'Georgia', serif",
+fontSize: 13,
+padding: "7px 9px",
+border: "1px solid #C8BAA0",
+background: "#FDFAF5",
+borderRadius: 2,
+color: "#1A1A1A",
+boxSizing: "border-box",
+};
+
+export default function App() {
+const [rows, setRows] = useState(10);
+const [cols, setCols] = useState(10);
+const [grid, setGrid] = useState(() => createGrid(10, 10));
+const [sel, setSel] = useState(null);
+const [preview, setPreview] = useState(false);
+
+const gridRef = useRef(grid);
+gridRef.current = grid;
+
+const selectedCell = sel ? grid[sel.r][sel.c] : null;
+
+function updateCell(r, c, updates) {
+setGrid(g => {
+const ng = deepCopy(g);
+ng[r][c] = { ...ng[r][c], ...updates };
+return ng;
+});
+}
+
+function handleCellClick(r, c) {
+if (preview) return;
+setSel(prev => (prev?.r === r && prev?.c === c ? null : { r, c }));
+}
+
+function toggleCellType() {
+if (!sel) return;
+const { r, c } = sel;
+const cell = gridRef.current[r][c];
+updateCell(r, c, {
+type: cell.type === "white" ? "grey" : "white",
+letter: "", defR: "", defD: "",
+});
+}
+
+useEffect(() => {
+function handleKey(e) {
+const currentSel = sel;
+if (!currentSel || preview) return;
+const cell = gridRef.current[currentSel.r][currentSel.c];
+if (cell.type !== "white") return;
+if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Tab"].includes(e.key)) {
+e.preventDefault();
+}
+if (e.key === "Backspace") {
+e.preventDefault();
+updateCell(currentSel.r, currentSel.c, { letter: "" });
+} else if (e.key.length === 1 && /^[a-zA-ZÀ-ÿ]$/.test(e.key)) {
+updateCell(currentSel.r, currentSel.c, { letter: e.key.toUpperCase() });
+// advance to next white cell on the right
+let nc = currentSel.c + 1;
+while (nc < cols && gridRef.current[currentSel.r][nc].type === "grey") nc++;
+if (nc < cols) setSel({ r: currentSel.r, c: nc });
+} else if (e.key === "Delete") {
+updateCell(currentSel.r, currentSel.c, { letter: "" });
+} else if (e.key === "ArrowRight" && currentSel.c < cols - 1) {
+setSel({ r: currentSel.r, c: currentSel.c + 1 });
+} else if (e.key === "ArrowLeft" && currentSel.c > 0) {
+setSel({ r: currentSel.r, c: currentSel.c - 1 });
+} else if (e.key === "ArrowDown" && currentSel.r < rows - 1) {
+setSel({ r: currentSel.r + 1, c: currentSel.c });
+} else if (e.key === "ArrowUp" && currentSel.r > 0) {
+setSel({ r: currentSel.r - 1, c: currentSel.c });
+} else if (e.key === "Tab") {
+e.preventDefault();
+let nc = currentSel.c + 1, nr = currentSel.r;
+if (nc >= cols) { nc = 0; nr = (nr + 1) % rows; }
+setSel({ r: nr, c: nc });
+}
+}
+window.addEventListener("keydown", handleKey);
+return () => window.removeEventListener("keydown", handleKey);
+}, [sel, preview, rows, cols]);
+
+function resizeGrid(newRows, newCols) {
+setRows(newRows); setCols(newCols);
+setGrid(prev => {
+const ng = createGrid(newRows, newCols);
+for (let r = 0; r < Math.min(newRows, prev.length); r++)
+for (let c = 0; c < Math.min(newCols, prev[0].length); c++)
+ng[r][c] = { ...prev[r][c] };
+return ng;
+});
+setSel(null);
+}
+
+return (
+<div style={{
+fontFamily: "'Georgia', serif",
+background: "#F5F0E6",
+minHeight: "100vh",
+padding: "24px 28px",
+}}>
+<style>{`
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&display=swap');
+* { box-sizing: border-box; }
+textarea { resize: vertical; }
+button:hover { opacity: 0.88; }
+`}</style>
+
+{/* Header */}
+<div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between",
+borderBottom: "2px solid #1A1A1A", paddingBottom: 14, marginBottom: 22 }}>
+<div>
+<h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, fontWeight: 900,
+color: "#1A1A1A", margin: 0, letterSpacing: "-0.5px" }}>
+Mots Fléchés
+</h1>
+<p style={{ margin: "2px 0 0", fontSize: 12, color: "#8A7A65", fontStyle: "italic" }}>
+Éditeur de grille interactif
+</p>
+</div>
+<div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+<label style={{ fontSize: 12, color: "#6A5A45" }}>
+Lignes&nbsp;
+<select value={rows} onChange={e => resizeGrid(+e.target.value, cols)} style={selectStyle}>
+{[5,6,7,8,9,10,12,13,15].map(n => <option key={n}>{n}</option>)}
+</select>
+</label>
+<label style={{ fontSize: 12, color: "#6A5A45" }}>
+Colonnes&nbsp;
+<select value={cols} onChange={e => resizeGrid(rows, +e.target.value)} style={selectStyle}>
+{[5,6,7,8,9,10,12,13,15].map(n => <option key={n}>{n}</option>)}
+</select>
+</label>
+<button
+onClick={() => { setGrid(createGrid(rows, cols)); setSel(null); }}
+style={{ ...btnStyle, background: "#7A6A55", color: "#FFF" }}>
+Effacer tout
+</button>
+<button
+onClick={() => { setPreview(p => !p); setSel(null); }}
+style={{ ...btnStyle, background: preview ? "#C8A400" : "#1A1A1A", color: "#FFF", fontWeight: "bold" }}>
+{preview ? "✎ Éditer" : "👁 Aperçu"}
+</button>
+</div>
+</div>
+
+{/* Main area */}
+<div style={{ display: "flex", gap: 28, alignItems: "flex-start", flexWrap: "wrap" }}>
+
+{/* Grid */}
+<div>
+<div style={{
+display: "inline-grid",
+gridTemplateColumns: `repeat(${cols}, ${CELL_SIZE}px)`,
+border: "2px solid #1A1A1A",
+boxShadow: "5px 5px 0 #1A1A1A",
+}}>
+{grid.map((row, r) =>
+row.map((cell, c) => (
+<GridCell
+key={`${r}-${c}`}
+cell={cell}
+size={CELL_SIZE}
+isSelected={!preview && sel?.r === r && sel?.c === c}
+isPreview={preview}
+onClick={() => handleCellClick(r, c)}
+/>
+))
+)}
+</div>
+{!preview && (
+<p style={{ marginTop: 8, fontSize: 11, color: "#8A7A65", fontStyle: "italic" }}>
+Cliquez pour sélectionner · Tapez une lettre · Flèches pour naviguer
+</p>
+)}
+{preview && (
+<p style={{ marginTop: 8, fontSize: 11, color: "#8A7A65", fontStyle: "italic" }}>
+Mode aperçu — cliquez sur « Éditer » pour modifier la grille
+</p>
+)}
+</div>
+
+{/* Side panel: cell editor */}
+{!preview && selectedCell && (
+<div style={{
+background: "#FDFAF4",
+border: "1px solid #C8BAA0",
+borderRadius: 3,
+padding: 20,
+minWidth: 250,
+maxWidth: 290,
+boxShadow: "3px 3px 0 #C8BAA0",
+}}>
+<div style={{ fontSize: 10, color: "#8A7A65", marginBottom: 12,
+textTransform: "uppercase", letterSpacing: "1.2px" }}>
+Case ({sel.r + 1}, {sel.c + 1})
+</div>
+
+{/* Toggle type */}
+<div style={{ display: "flex", marginBottom: 18, border: "1px solid #1A1A1A",
+borderRadius: 2, overflow: "hidden" }}>
+{[["white", "□ Blanche"], ["grey", "■ Grise"]].map(([t, label]) => (
+<button
+key={t}
+onClick={() => selectedCell.type !== t && toggleCellType()}
+style={{
+flex: 1, padding: "9px 0", fontSize: 12, border: "none", cursor: "pointer",
+fontFamily: "'Georgia', serif",
+background: selectedCell.type === t ? "#1A1A1A" : "#F0EBE0",
+color: selectedCell.type === t ? "#FFF" : "#5A4A35",
+}}>
+{label}
+</button>
+))}
+</div>
+
+{selectedCell.type === "white" && (
+<div>
+<label style={labelStyle}>Lettre</label>
+<input
+maxLength={1}
+value={selectedCell.letter}
+onChange={e => {
+const v = e.target.value.toUpperCase();
+if (/^[A-ZÀ-Ÿ]?$/.test(v)) updateCell(sel.r, sel.c, { letter: v });
+}}
+style={{
+...inputStyle, fontSize: 28, textAlign: "center",
+fontFamily: "'Courier New', monospace", fontWeight: "bold",
+width: "100%", letterSpacing: 4,
+}}
+placeholder="A"
+autoFocus
+/>
+<p style={{ fontSize: 11, color: "#8A7A65", fontStyle: "italic", marginTop: 8 }}>
+Ou tapez directement sur la grille après sélection.
+</p>
+</div>
+)}
+
+{selectedCell.type === "grey" && (
+<div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+<div>
+<label style={labelStyle}>Définition → (vers la droite)</label>
+<textarea
+rows={2}
+value={selectedCell.defR}
+onChange={e => updateCell(sel.r, sel.c, { defR: e.target.value })}
+placeholder="Ex : Liquide vital…"
+style={{ ...inputStyle, width: "100%", fontSize: 12 }}
+/>
+</div>
+<div>
+<label style={labelStyle}>Définition ↓ (vers le bas)</label>
+<textarea
+rows={2}
+value={selectedCell.defD}
+onChange={e => updateCell(sel.r, sel.c, { defD: e.target.value })}
+placeholder="Ex : Capitale de la France…"
+style={{ ...inputStyle, width: "100%", fontSize: 12 }}
+/>
+</div>
+<p style={{ fontSize: 11, color: "#8A7A65", fontStyle: "italic", margin: 0 }}>
+Une case grise peut porter deux définitions simultanées.
+</p>
+</div>
+)}
+</div>
+)}
+
+{/* Help panel when nothing is selected */}
+{!preview && !sel && (
+<div style={{
+background: "#FDFAF4",
+border: "1px dashed #C8BAA0",
+borderRadius: 3,
+padding: 20,
+minWidth: 220,
+maxWidth: 260,
+}}>
+<div style={{ fontFamily: "'Playfair Display', serif", fontSize: 16,
+color: "#1A1A1A", marginBottom: 14, fontWeight: 700 }}>
+Guide rapide
+</div>
+{[
+["🖱", "Cliquez une case pour la sélectionner"],
+["⬜", "Case blanche = lettre de réponse"],
+["⬛", "Case grise = définition + flèche(s)"],
+["⌨️", "Tapez directement pour saisir une lettre"],
+["↕↔", "Flèches clavier pour naviguer"],
+["👁", "Aperçu pour voir la grille finale"],
+].map(([icon, text]) => (
+<div key={icon} style={{ fontSize: 12, color: "#4A3A2A", marginBottom: 8,
+display: "flex", gap: 8, alignItems: "flex-start", lineHeight: 1.4 }}>
+<span style={{ flexShrink: 0 }}>{icon}</span>
+<span>{text}</span>
+</div>
+))}
+</div>
+)}
+</div>
+</div>
+);
+}
