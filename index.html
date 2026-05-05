@@ -117,14 +117,12 @@ function buildBentMap(){
     for(var i=0;i<arrows.length;i++){
       var at=arrows[i];
 
-      // ↳ : l’indicateur apparaît dans la case du dessous
       if(at==='bdr' && r+1<S.r){
         var k=(r+1)+','+c;
         if(!map[k]) map[k]={};
         map[k].bdr=true;
       }
 
-      // ↱ : l’indicateur apparaît dans la case de droite
       if(at==='brd' && c+1<S.c){
         var k=r+','+(c+1);
         if(!map[k]) map[k]={};
@@ -137,71 +135,58 @@ function buildBentMap(){
 
 function bentIndicator(type){
   if(type==='bdr'){
-    return '<svg style="position:absolute;top:3px;left:3px;z-index:20;pointer-events:none;overflow:visible" width="10" height="10" viewBox="0 0 10 10">'
-      +'<polyline points="3,0 3,7 10,7" stroke="'+AK+'" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
-      +'<polygon points="7,4 7,10 13,7" fill="'+AK+'"/>'
-      +'</svg>';
+    return '<div style="position:absolute;top:2px;left:2px;font-size:10px;z-index:9;pointer-events:none">↳</div>';
   }
   if(type==='brd'){
-    return '<svg style="position:absolute;top:3px;right:3px;z-index:20;pointer-events:none;overflow:visible" width="10" height="10" viewBox="0 0 10 10">'
-      +'<polyline points="10,3 3,3 3,10" stroke="'+AK+'" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
-      +'<polygon points="0,7 6,7 3,13" fill="'+AK+'"/>'
-      +'</svg>';
+    return '<div style="position:absolute;top:2px;right:2px;font-size:10px;z-index:9;pointer-events:none">↱</div>';
   }
   return '';
 }
-function rg(){
-  var tbl=document.getElementById('gt');
-  if(!tbl||!S.g) return;
 
-  var bentMap=buildBentMap();
-  var rows=[],r,c,cell,cls,inner,l,lc;
-
-  for(r=0;r<S.r;r++){
-    var cells=[];
-    for(c=0;c<S.c;c++){
-      cell=S.g[r][c];
-      var isSel=S.sel&&S.sel.r===r&&S.sel.c===c;
-      var isHL=S.sel&&(S.sel.r===r||S.sel.c===c)&&cell.t==='w'&&!isSel&&S.m==='e';
-
-      cls=cell.t==='g'?'g':'';
-      if(isSel) cls+=' sel';
-      if(isHL) cls+=' hl';
-      if(cell.t==='w'&&cell.n!==null) cls+=' num';
-
+function gi(r,c){
+  var bm=buildBentMap()[r+','+c];
+  var h='';
+  if(bm){
+    if(bm.bdr) h+=bentIndicator('bdr');
+    if(bm.brd) h+=bentIndicator('brd');
+  }
+  return h;
+}
+function rgi(cell){
+  var dr=cell.dr||'',
+      dd=cell.dd,
+      ar=cell.ar||'r',
+      ad=cell.ad||'d',
+      P=3,
+      CS=60,
+      isp=sp(cell),
       inner='';
 
-      if(cell.t==='w'){
-        l=''; lc='L';
+  if(isp){
+    var h1=CS/2-P*2;
+    inner=
+      '<div class="Gl"></div>'+
+      '<div class="Gt" style="top:'+P+'px;left:'+P+'px;right:'+P+'px;bottom:50%;font-size:'+fs(dr,CS-P*2,h1)+'px">'+he(dr)+'</div>'+
+      '<div class="Gt" style="top:50%;left:'+P+'px;right:'+P+'px;bottom:'+P+'px;font-size:'+fs(dd||'',CS-P*2,h1)+'px">'+he(dd||'')+'</div>';
 
-        if(S.m==='e'||S.m==='s'){
-          l=cell.l;
-        }else{
-          l=S.pa[r][c]||'';
-          lc='L Lp';
-          if(l&&cell.l) lc='L '+(l===cell.l?'Lo':'Lk');
-        }
+    if(ar==='r'||ar==='d') inner+=sa(ar,false,true);
+    if(ad==='r'||ad==='d') inner+=sa(ad,true,true);
 
-        if(l) inner+='<span class="'+lc+'">'+he(l)+'</span>';
-        if(cell.n!==null) inner+='<span class="Cn">'+cell.n+'</span>';
+    if(ar==='bdr') inner+='<div style="position:absolute;top:2px;left:2px;font-size:10px;z-index:9;pointer-events:none">↳</div>';
+    if(ad==='brd') inner+='<div style="position:absolute;top:2px;right:2px;font-size:10px;z-index:9;pointer-events:none">↱</div>';
 
-        var bm=bentMap[r+','+c];
-        if(bm){
-          if(bm.bdr) inner+=bentIndicator('bdr');
-          if(bm.brd) inner+=bentIndicator('brd');
-        }
-      }else{
-        inner=rgi(cell);
-      }
+  }else{
+    inner=
+      '<div class="Gt" style="inset:'+P+'px;font-size:'+fs(dr,CS-P*2,CS-P*2)+'px">'+he(dr)+'</div>';
 
-      cells.push('<td class="'+cls.trim()+'" onclick="cc('+r+','+c+')">'+inner+'</td>');
-    }
-    rows.push('<tr>'+cells.join('')+'</tr>');
+    if(ar==='r'||ar==='d') inner+=sa(ar,false,false);
+
+    if(ar==='bdr') inner+='<div style="position:absolute;top:2px;left:2px;font-size:10px;z-index:9;pointer-events:none">↳</div>';
+    if(ar==='brd') inner+='<div style="position:absolute;top:2px;right:2px;font-size:10px;z-index:9;pointer-events:none">↱</div>';
   }
 
-  tbl.innerHTML=rows.join('');
+  return inner;
 }
-function rgi(cell){var dr=cell.dr||'',dd=cell.dd,ar=cell.ar||'r',ad=cell.ad||'d',P=3,CS=60,isp=sp(cell),inner='';if(isp){var h1=CS/2-P*2;inner='<div class="Gl"></div><div class="Gt" style="top:'+P+'px;left:'+P+'px;right:'+P+'px;bottom:50%;font-size:'+fs(dr,CS-P*2,h1)+'px">'+he(dr)+'</div><div class="Gt" style="top:50%;left:'+P+'px;right:'+P+'px;bottom:'+P+'px;font-size:'+fs(dd||'',CS-P*2,h1)+'px">'+he(dd||'')+'</div>';if(ar==='r'||ar==='d')inner+=sa(ar,false,true);if(ad==='r'||ad==='d')inner+=sa(ad,true,true)}else{inner='<div class="Gt" style="inset:'+P+'px;font-size:'+fs(dr,CS-P*2,CS-P*2)+'px">'+he(dr)+'</div>';if(ar==='r'||ar==='d')inner+=sa(ar,false,false)}return inner}
 function rg(){var tbl=document.getElementById('gt');if(!tbl||!S.g)return;var rows=[],r,c,cell,cls,inner,l,lc;for(r=0;r<S.r;r++){var cells=[];for(c=0;c<S.c;c++){cell=S.g[r][c];var isSel=S.sel&&S.sel.r===r&&S.sel.c===c;var isHL=S.sel&&(S.sel.r===r||S.sel.c===c)&&cell.t==='w'&&!isSel&&S.m==='e';cls=cell.t==='g'?'g':'';if(isSel)cls+=' sel';if(isHL)cls+=' hl';if(cell.t==='w'&&cell.n!==null)cls+=' num';inner='';if(cell.t==='w'){l='';lc='L';if(S.m==='e'||S.m==='s'){l=cell.l}else{l=S.pa[r][c]||'';lc='L Lp';if(l&&cell.l)lc='L '+(l===cell.l?'Lo':'Lk')}if(l)inner+='<span class="'+lc+'">'+he(l)+'</span>';if(cell.n!==null)inner+='<span class="Cn">'+cell.n+'</span>';inner+=gi(r,c)}else{inner=rgi(cell)}cells.push('<td class="'+cls.trim()+'" onclick="cc('+r+','+c+')">'+inner+'</td>')}rows.push('<tr>'+cells.join('')+'</tr>')}tbl.innerHTML=rows.join('')}
 function rph(){var e=gp(),el=document.getElementById('PH');if(!el)return;if(!e.length){el.innerHTML='';return}var h='';for(var i=0;i<e.length;i++){var x=e[i];h+='<div class="pb'+(x.l?' lit':'')+'"><span class="pn">'+x.n+'</span><span class="pl">'+(x.l?he(x.l):'&nbsp;')+'</span></div>'}el.innerHTML=h}
 function render(){rg();rsb();rph()}
