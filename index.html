@@ -110,12 +110,7 @@ function sa(d,b,isp){
   if(d==='d') return '<span style="'+st+'bottom:-5px;left:50%;transform:translateX(-50%)">⭣</span>';
   return '';
 }
-function bi(d,x){
-  var st='position:absolute;top:-2px;z-index:20;pointer-events:none;line-height:1;font-family:"Segoe UI Symbol","Noto Sans Symbols2","Apple Symbols",Arial,sans-serif;font-size:18px;font-weight:700;color:'+AK+';';
-  if(d==='bdr') return '<span style="'+st+'left:'+(x-4)+'px">↳</span>';
-  if(d==='brd') return '<span style="'+st+'left:'+(x-4)+'px">⬎</span>';
-  return '';
-}
+
 function bentIndicator(type){
   if(type==='bdr'){
     return '<div style="position:absolute;top:2px;left:2px;font-size:10px;z-index:9;pointer-events:none">↳</div>';
@@ -125,47 +120,73 @@ function bentIndicator(type){
   }
   return '';
 }
-function buildBentMap(){
+function buildArrowMap(){
   var map={};
+
+  function put(r,c,t){
+    if(r<0||c<0||r>=S.r||c>=S.c) return;
+    var k=r+','+c;
+    if(!map[k]) map[k]=[];
+    map[k].push(t);
+  }
+
   for(var r=0;r<S.r;r++)for(var c=0;c<S.c;c++){
     var cell=S.g[r][c];
     if(cell.t!=='g') continue;
 
-    var arrows=[cell.ar||'r'];
-    if(sp(cell)) arrows.push(cell.ad||'d');
+    var ats=[cell.ar||'r'];
+    if(sp(cell)) ats.push(cell.ad||'d');
 
-    for(var i=0;i<arrows.length;i++){
-      var at=arrows[i];
+    for(var i=0;i<ats.length;i++){
+      var at=ats[i];
 
-      if(at==='bdr' && r+1<S.r){
-        var k=(r+1)+','+c;
-        if(!map[k]) map[k]={};
-        map[k].bdr=true;
-      }
+      // flèche → dans la case blanche à droite
+      if(at==='r') put(r,c+1,'r');
 
-      if(at==='brd' && c+1<S.c){
-        var k=r+','+(c+1);
-        if(!map[k]) map[k]={};
-        map[k].brd=true;
-      }
+      // flèche ↓ dans la case blanche en dessous
+      else if(at==='d') put(r+1,c,'d');
+
+      // flèche coudée bas→droite dans la case du dessous
+      else if(at==='bdr') put(r+1,c,'bdr');
+
+      // flèche coudée droite→bas dans la case de droite
+      else if(at==='brd') put(r,c+1,'brd');
     }
   }
+
   return map;
 }
-function gi(r,c){
-  var bm=buildBentMap()[r+','+c];
-  var h='';
-  if(bm){
-    if(bm.bdr) h+=bentIndicator('bdr');
-    if(bm.brd) h+=bentIndicator('brd');
+
+function arrowMark(type){
+  var base='position:absolute;display:flex;align-items:center;justify-content:center;'
+    +'width:18px;height:18px;pointer-events:none;z-index:20;line-height:1;'
+    +'font-family:"Segoe UI Symbol","Noto Sans Symbols2","Apple Symbols",Arial,sans-serif;'
+    +'font-size:18px;font-weight:700;color:'+AK+';';
+
+  if(type==='r'){
+    return '<span style="'+base+'left:-9px;top:50%;transform:translateY(-50%)">⭢</span>';
   }
+  if(type==='d'){
+    return '<span style="'+base+'left:50%;top:-9px;transform:translateX(-50%)">⭣</span>';
+  }
+  if(type==='bdr'){
+    return '<span style="'+base+'left:-10px;top:-1px">⬎</span>';
+  }
+  if(type==='brd'){
+    return '<span style="'+base+'right:-10px;top:-1px">↳</span>';
+  }
+  return '';
+}
+
+function gi(r,c){
+  var m=buildArrowMap()[r+','+c],h='';
+  if(m) for(var i=0;i<m.length;i++) h+=arrowMark(m[i]);
   return h;
 }
+
 function rgi(cell){
   var dr=cell.dr||'',
       dd=cell.dd,
-      ar=cell.ar||'r',
-      ad=cell.ad||'d',
       P=3,
       CS=60,
       isp=sp(cell),
@@ -177,15 +198,9 @@ function rgi(cell){
       '<div class="Gl"></div>'+
       '<div class="Gt" style="top:'+P+'px;left:'+P+'px;right:'+P+'px;bottom:50%;font-size:'+fs(dr,CS-P*2,h1)+'px">'+he(dr)+'</div>'+
       '<div class="Gt" style="top:50%;left:'+P+'px;right:'+P+'px;bottom:'+P+'px;font-size:'+fs(dd||'',CS-P*2,h1)+'px">'+he(dd||'')+'</div>';
-
-    if(ar==='r'||ar==='d') inner+=sa(ar,false,true);
-    if(ad==='r'||ad==='d') inner+=sa(ad,true,true);
-
   }else{
     inner=
       '<div class="Gt" style="inset:'+P+'px;font-size:'+fs(dr,CS-P*2,CS-P*2)+'px">'+he(dr)+'</div>';
-
-    if(ar==='r'||ar==='d') inner+=sa(ar,false,false);
   }
 
   return inner;
