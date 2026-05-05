@@ -119,7 +119,33 @@ function bentIndicator(type){
   }
   return '';
 }
+function buildBentMap(){
+  var map={};
+  for(var r=0;r<S.r;r++)for(var c=0;c<S.c;c++){
+    var cell=S.g[r][c];
+    if(cell.t!=='g') continue;
 
+    var arrows=[cell.ar||'r'];
+    if(sp(cell)) arrows.push(cell.ad||'d');
+
+    for(var i=0;i<arrows.length;i++){
+      var at=arrows[i];
+
+      if(at==='bdr' && r+1<S.r){
+        var k=(r+1)+','+c;
+        if(!map[k]) map[k]={};
+        map[k].bdr=true;
+      }
+
+      if(at==='brd' && c+1<S.c){
+        var k=r+','+(c+1);
+        if(!map[k]) map[k]={};
+        map[k].brd=true;
+      }
+    }
+  }
+  return map;
+}
 function gi(r,c){
   var bm=buildBentMap()[r+','+c];
   var h='';
